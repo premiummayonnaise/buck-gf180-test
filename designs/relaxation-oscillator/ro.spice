@@ -1,0 +1,63 @@
+** Relaxation Oscillator — GF180MCU
+** Fixed: IBIAS typo, SR latch pin order, sim time
+
+.include /foss/pdks/gf180mcuD/libs.tech/ngspice/design.ngspice
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/sm141064.ngspice typical
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/smbb000149.ngspice typical
+.include /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/spice/gf180mcu_fd_sc_mcu7t5v0.spice
+
+V5  VDD VSS 5
+V7  VSS GND 0
+V2  VREF VSS dc 1.25
+
+* Ramp current sources
+I1  VDD net1 15u
+I2  VDD net2 15u
+
+* Bias for comp_hyst
+I4  IBIAS1 VSS 20u
+I3  IBIAS2 VSS 20u
+
+* Discharge NMOS
+XM2 RAMPA CLKB VSS VSS nfet_05v0 L=1.25u W=5u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM4 RAMPB CLKA VSS VSS nfet_05v0 L=1.25u W=5u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+
+* Ramp caps
+C1 RAMPA VSS 3p m=1
+C2 RAMPB VSS 3p m=1
+
+* Comparators
+x1 VDD IBIAS1 RAMPA VREF S VSS comp_hyst
+x2 VDD IBIAS2 RAMPB VREF R VSS comp_hyst
+
+* SR latch — NOR2: A B ZN VDD VNW VSS VPW
+* NOR1: S + CLKB -> CLKA
+* NOR2: R + CLKA -> CLKB
+x5 S  CLKB CLKA VDD VDD VSS VSS gf180mcu_fd_sc_mcu7t5v0__nor2_2
+x6 R  CLKA CLKB VDD VDD VSS VSS gf180mcu_fd_sc_mcu7t5v0__nor2_2
+
+.ic V(RAMPA)=0 V(RAMPB)=2.5
+
+.control
+tran 10n 1m
+plot CLKA CLKB RAMPA RAMPB
+plot S R
+.endc
+
+.subckt comp_hyst VDD IBIAS_20uA VIN VREF OUT VSS
+XM1  net2 IBIAS_20uA VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM2  IBIAS_20uA IBIAS_20uA VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM3  net1 net1 VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM4  OUT net1 VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM5  net4 VIN  net2 VDD pfet_05v0 L=1u W=11.21u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM6  net3 VREF net2 VDD pfet_05v0 L=1u W=11.21u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM7  net3 net3 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM8  net4 net3 VSS VSS nfet_05v0  L=1u W=47.46u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM9  net3 net4 VSS VSS nfet_05v0  L=1u W=47.46u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM10 net4 net4 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM11 net1 net4 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM12 OUT  net3 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+.ends
+
+.GLOBAL GND
+.end

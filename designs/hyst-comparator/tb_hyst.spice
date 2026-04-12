@@ -1,0 +1,194 @@
+spice** Testbench: Full FoM analysis for comp_hyst
+** Measures: Vhyst, VOH/VOL, Vos, tpd_fall, tpd_rise, SR, Iq, Power
+
+.include /foss/pdks/gf180mcuD/libs.tech/ngspice/design.ngspice
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/sm141064.ngspice typical
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/smbb000149.ngspice typical
+
+* ── Supplies ──────────────────────────────────────────────
+V4   VDD  VSS  5
+V2   VSS  GND  0
+V5   VREF VSS  1.25
+I0   IBIAS VSS 20u
+I1   IBIAS2 VSS 20u
+
+* ── Instance 1: triangle ramp → Vhyst, VOH/VOL, SR, tpd_fall ──
+C1   OUT1 VSS 20f m=1
+V1   VIN1 VSS PWL(
++ 0n    0.5
++ 4u    2.0
++ 8u    0.5
++ 10u   0.5)
+
+* ── Instance 2: fast step → tpd_rise, tpd_fall averaged ──
+C2   OUT2 VSS 20f m=1
+V3   VIN2 VSS PWL(
++ 0n      0.8
++ 200n    0.8
++ 205n    1.7
++ 700n    1.7
++ 705n    0.8
++ 1200n   0.8
++ 1205n   1.7
++ 1700n   1.7
++ 1705n   0.8
++ 2200n   0.8
++ 2205n   1.7
++ 2700n   1.7
++ 2705n   0.8
++ 10u     0.8)
+
+x1 VDD IBIAS  VIN1 VREF OUT1 VSS comp_hyst
+x2 VDD IBIAS2 VIN2 VREF OUT2 VSS comp_hyst
+
+.control
+
+tran 10p 10u
+run
+
+* ══════════════════════════════════════════════
+* VOH / VOL (inst 1, output settled high/low)
+* ══════════════════════════════════════════════
+meas tran VOH max v(out1) from=0    to=2u
+meas tran VOL min v(out1) from=4.5u to=6u
+
+* ══════════════════════════════════════════════
+* Hysteresis: upper trip (VIN1 rising) and lower trip (VIN1 falling)
+* V_tpu = VIN1 when OUT1 falls through VOH/2
+* V_tpl = VIN1 when OUT1 rises through VOH/2
+* ══════════════════════════════════════════════
+meas tran t_tpu when v(out1)=2.5 fall=1
+meas tran t_tpl when v(out1)=2.5 rise=1
+* Sample VIN1 at those times using cross
+meas tran V_tpu find v(vin1) at=t_tpu
+meas tran V_tpl find v(vin1) at=t_tpl
+let Vhyst = V_tpu - V_tpl
+
+* ══════════════════════════════════════════════
+* Vos: Vcenter = (V_tpu + V_tpl)/2, should equal VREF=1.25V
+* ══════════════════════════════════════════════
+let Vcenter = (V_tpu + V_tpl) / 2
+let Vos     = Vcenter - 1.25
+
+* ══════════════════════════════════════════════
+* Slew rate (inst 1)
+* SR_fall: OUT1 falling, measure from 80% to 20% of VOH
+* SR_rise: OUT1 rising, measure from 20% to 80% of VOH
+* ══════════════════════════════════════════════
+let voh_val = VOH
+let v80 = 0.8 * voh_val
+let v20 = 0.2 * voh_val
+
+meas tran t_sr_f_hi when v(out1)=v80  fall=1
+meas tran t_sr_f_lo when v(out1)=v20  fall=1
+meas tran t_sr_r_lo when v(out1)=v20  rise=1
+meas tran t_sr_r_hi when v(out1)=v80  rise=1
+
+let tf1       = t_sr_f_lo - t_sr_f_hi
+let tr1       = t_sr_r_hi - t_sr_r_lo
+let SR_fall   = -voh_val * 0.6 / tf1
+let SR_rise   =  voh_val * 0.6 / tr1
+
+* ══════════════════════════════════════════════
+* tpd (inst 2, fast step stimulus)
+* tpd_fall: VIN2 rises through 1.25V -> OUT2 falls through 2.5V
+* tpd_rise: VIN2 falls through 1.25V -> OUT2 rises through 2.5V
+* ══════════════════════════════════════════════
+meas tran t_in_r1  when v(vin2)=1.25 rise=1
+meas tran t_out_f1 when v(out2)=2.5  fall=1
+let tpd_fall1 = t_out_f1 - t_in_r1
+
+meas tran t_in_r2  when v(vin2)=1.25 rise=2
+meas tran t_out_f2 when v(out2)=2.5  fall=2
+let tpd_fall2 = t_out_f2 - t_in_r2
+
+meas tran t_in_r3  when v(vin2)=1.25 rise=3
+meas tran t_out_f3 when v(out2)=2.5  fall=3
+let tpd_fall3 = t_out_f3 - t_in_r3
+
+meas tran t_in_f1  when v(vin2)=1.25 fall=1
+meas tran t_out_r1 when v(out2)=2.5  rise=1
+let tpd_rise1 = t_out_r1 - t_in_f1
+
+meas tran t_in_f2  when v(vin2)=1.25 fall=2
+meas tran t_out_r2 when v(out2)=2.5  rise=2
+let tpd_rise2 = t_out_r2 - t_in_f2
+
+meas tran t_in_f3  when v(vin2)=1.25 fall=3
+meas tran t_out_r3 when v(out2)=2.5  rise=3
+let tpd_rise3 = t_out_r3 - t_in_f3
+
+let tpd_fall_avg = (tpd_fall1 + tpd_fall2 + tpd_fall3) / 3
+let tpd_rise_avg = (tpd_rise1 + tpd_rise2 + tpd_rise3) / 3
+let tpd_avg      = (tpd_fall_avg + tpd_rise_avg) / 2
+
+* ══════════════════════════════════════════════
+* Power (both instances combined)
+* ══════════════════════════════════════════════
+let ivdd_total = -i(v4)
+meas tran iavg_total avg ivdd_total from=0 to=10u
+let p_total_uW   = iavg_total * 5.0 * 1e6
+let p_per_inst_uW = p_total_uW / 2
+let iavg_per_inst = iavg_total / 2
+
+* ══════════════════════════════════════════════
+* Print
+* ══════════════════════════════════════════════
+echo =============================================
+echo === OUTPUT SWING ===
+print VOH
+print VOL
+echo === HYSTERESIS ===
+print V_tpu
+print V_tpl
+print Vhyst
+echo === OFFSET ===
+print Vcenter
+print Vos
+echo === SLEW RATE ===
+print SR_fall
+print SR_rise
+print tf1
+print tr1
+echo === TPD (inst 2) ===
+print tpd_fall_avg
+print tpd_rise_avg
+print tpd_avg
+echo === POWER ===
+print iavg_total
+print iavg_per_inst
+print p_total_uW
+print p_per_inst_uW
+echo =============================================
+
+* ══════════════════════════════════════════════
+* CSV export
+* ══════════════════════════════════════════════
+wrdata /foss/designs/sim_results/comp_hyst_fom.csv v(vin1) v(vin2) v(out1) v(out2) v(vref) ivdd_total
+
+* ══════════════════════════════════════════════
+* Plots
+* ══════════════════════════════════════════════
+plot v(vin1) v(vref) v(out1) title 'Inst1 triangle ramp - Vhyst'
+plot v(vin2) v(vref) v(out2) title 'Inst2 fast step - tpd'
+
+.endc
+
+* ── Subckt ────────────────────────────────────────────────
+.subckt comp_hyst VDD IBIAS_20uA VIN VREF OUT VSS
+XM1  net2 IBIAS_20uA VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM2  IBIAS_20uA IBIAS_20uA VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM3  net1 net1 VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM4  OUT net1 VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM5  net4 VIN  net2 VDD pfet_05v0 L=1u W=11.21u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM6  net3 VREF net2 VDD pfet_05v0 L=1u W=11.21u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM7  net3 net3 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM8  net4 net3 VSS VSS nfet_05v0  L=1u W=27.12u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM9  net3 net4 VSS VSS nfet_05v0  L=1u W=27.12u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM10 net4 net4 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM11 net1 net4 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM12 OUT  net3 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+.ends
+
+.GLOBAL GND
+.end

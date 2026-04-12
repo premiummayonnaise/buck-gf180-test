@@ -1,0 +1,100 @@
+** Testbench: tpd measurement for comp_hyst
+** Measures tpd_fall (VIN crosses VREF going up  -> OUT falls)
+**         tpd_rise (VIN crosses VREF going down -> OUT rises)
+
+.include /foss/pdks/gf180mcuD/libs.tech/ngspice/design.ngspice
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/sm141064.ngspice typical
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/smbb000149.ngspice typical
+
+V4  VDD VSS 5
+V2  VSS GND 0
+V5  VREF VSS 1.25
+I0  IBIAS VSS 20u
+C1  OUT VSS 5f m=1
+
+V1 VIN VSS PWL(
++ 0n      0.8
++ 200n    0.8
++ 205n    1.7
++ 700n    1.7
++ 705n    0.8
++ 1200n   0.8
++ 1205n   1.7
++ 1700n   1.7
++ 1705n   0.8
++ 2200n   0.8
++ 2205n   1.7
++ 2700n   1.7
++ 2705n   0.8
++ 3200n   0.8)
+
+x1 VDD IBIAS VIN VREF OUT VSS comp_hyst
+
+.control
+
+tran 10p 3.2u
+run
+
+meas tran t_in_r1  when v(vin)=1.25 rise=1
+meas tran t_out_f1 when v(out)=2.5  fall=1
+let tpd_fall1 = t_out_f1 - t_in_r1
+
+meas tran t_in_r2  when v(vin)=1.25 rise=2
+meas tran t_out_f2 when v(out)=2.5  fall=2
+let tpd_fall2 = t_out_f2 - t_in_r2
+
+meas tran t_in_r3  when v(vin)=1.25 rise=3
+meas tran t_out_f3 when v(out)=2.5  fall=3
+let tpd_fall3 = t_out_f3 - t_in_r3
+
+let tpd_fall_avg = (tpd_fall1 + tpd_fall2 + tpd_fall3) / 3
+
+meas tran t_in_f1  when v(vin)=1.25 fall=1
+meas tran t_out_r1 when v(out)=2.5  rise=1
+let tpd_rise1 = t_out_r1 - t_in_f1
+
+meas tran t_in_f2  when v(vin)=1.25 fall=2
+meas tran t_out_r2 when v(out)=2.5  rise=2
+let tpd_rise2 = t_out_r2 - t_in_f2
+
+meas tran t_in_f3  when v(vin)=1.25 fall=3
+meas tran t_out_r3 when v(out)=2.5  rise=3
+let tpd_rise3 = t_out_r3 - t_in_f3
+
+let tpd_rise_avg = (tpd_rise1 + tpd_rise2 + tpd_rise3) / 3
+let tpd_avg = (tpd_fall_avg + tpd_rise_avg) / 2
+
+let ivdd = -i(v4)
+meas tran iavg avg ivdd from=0 to=3.2u
+let p_uW = iavg * 5.0 * 1e6
+
+echo =============================================
+print tpd_fall_avg
+print tpd_rise_avg
+print tpd_avg
+print iavg
+print p_uW
+echo =============================================
+
+wrdata /foss/designs/sim_results/comp_hyst_tpd.csv v(vin) v(vref) v(out) ivdd
+plot v(vin) v(vref) v(out) title 'comp_hyst tpd'
+
+.endc
+
+.subckt comp_hyst VDD IBIAS_20uA VIN VREF OUT VSS
+XM1  net2 IBIAS_20uA VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM2  IBIAS_20uA IBIAS_20uA VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM3  net1 net1 VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM4  OUT net1 VDD VDD pfet_05v0 L=1u W=11.8u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM5  net4 VIN  net2 VDD pfet_05v0 L=1u W=11.21u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM6  net3 VREF net2 VDD pfet_05v0 L=1u W=11.21u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM7  net3 net3 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM8  net4 net3 VSS VSS nfet_05v0  L=1u W=47.46u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM9  net3 net4 VSS VSS nfet_05v0  L=1u W=47.46u nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM10 net4 net4 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM11 net1 net4 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+XM12 OUT  net3 VSS VSS nfet_05v0  L=1u W=6.78u  nf=1 ad='int((nf+1)/2)*W/nf*0.18u' as='int((nf+2)/2)*W/nf*0.18u' pd='2*int((nf+1)/2)*(W/nf+0.18u)' ps='2*int((nf+2)/2)*(W/nf+0.18u)' nrd='0.18u/W' nrs='0.18u/W' sa=0 sb=0 sd=0 m=1
+.ends
+
+.GLOBAL GND
+.end
