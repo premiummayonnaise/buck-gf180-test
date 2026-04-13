@@ -1,0 +1,142 @@
+* ============================================================
+*  DC TESTBENCH — Cascoded Symmetrical OTA (symmetrical-ota-2)
+*  Tests: ICMR, Vos, Output Swing, Quiescent
+*  Supply : 5V  (GF180MCU pfet_05v0 / nfet_05v0)
+*  Author : Dzaki Andriansyah / NRP 5022231023
+* ============================================================
+
+.include /foss/pdks/gf180mcuD/libs.tech/ngspice/design.ngspice
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/sm141064.ngspice typical
+.lib /foss/pdks/gf180mcuD/libs.tech/ngspice/smbb000149.ngspice typical
+
+* ============================================================
+*  CONVERGENCE OPTIONS
+* ============================================================
+.options method=gear reltol=1e-4 abstol=1e-12 vntol=1e-6
++ itl1=500 itl2=500 itl4=100
+
+* ============================================================
+*  TEST 1 — ICMR
+*  Unity-gain follower, sweep VCM 0->5V
+*  Use 1G resistor for feedback instead of voltage short
+*  to help DC convergence
+* ============================================================
+V_VDD1  VDD1  VSS1  5
+V_VSS1  VSS1  GND   0
+I_B1    VDD1  IB1   2u
+V_VCM   VCM   VSS1  DC 2.5
+x_icmr  VDD1 IB1 OUT_ICMR VN_ICMR VCM VSS1 symmetrical-ota-2
+R_NFB1  VN_ICMR  OUT_ICMR  1G
+C_L1    OUT_ICMR VSS1 10p
+
+* ============================================================
+*  TEST 2 — INPUT OFFSET VOLTAGE
+*  Unity-gain, sweep VP2 around mid-supply
+* ============================================================
+V_VDD2  VDD2  VSS2  5
+V_VSS2  VSS2  GND   0
+I_B2    VDD2  IB2   2u
+V_VP2   VP2   VSS2  DC 2.5
+x_vos   VDD2 IB2 OUT_VOS VN_VOS VP2 VSS2 symmetrical-ota-2
+R_NFB2  VN_VOS  OUT_VOS  1G
+C_L2    OUT_VOS VSS2 10p
+
+* ============================================================
+*  TEST 3 — OUTPUT SWING
+*  Open loop, VCM=2.5V, VP-VN = +-500mV
+* ============================================================
+V_VDD3  VDD3  VSS3  5
+V_VSS3  VSS3  GND   0
+I_B3    VDD3  IB3   2u
+
+* VOH: VP > VN
+V_VP3h  VP3h  VSS3  DC 2.75
+V_VN3h  VN3h  VSS3  DC 2.25
+x_voh   VDD3 IB3 OUT_VOH VN3h VP3h VSS3 symmetrical-ota-2
+C_L3    OUT_VOH VSS3 10p
+
+* VOL: VP < VN (separate bias instance to avoid conflict)
+V_VDD3b VDD3b VSS3b 5
+V_VSS3b VSS3b GND   0
+I_B3b   VDD3b IB3b  2u
+V_VP3l  VP3l  VSS3b DC 2.25
+V_VN3l  VN3l  VSS3b DC 2.75
+x_vol   VDD3b IB3b OUT_VOL VN3l VP3l VSS3b symmetrical-ota-2
+C_L4    OUT_VOL VSS3b 10p
+
+* ============================================================
+*  TEST 4 — QUIESCENT POINT
+*  Balanced unity-gain, VP=VN=2.5V
+* ============================================================
+V_VDD4  VDD4  VSS4  5
+V_VSS4  VSS4  GND   0
+I_B4    VDD4  IB4   2u
+V_VP4   VP4   VSS4  DC 2.5
+x_bias  VDD4 IB4 OUT_Q VN_Q VP4 VSS4 symmetrical-ota-2
+R_NFB4  VN_Q  OUT_Q  1G
+C_L5    OUT_Q VSS4 10p
+
+* ============================================================
+*  SUBCKT
+* ============================================================
+.subckt symmetrical-ota-2 VDD IBIAS_2uA OUT VN VP VSS
+XM1  net1 VP  net10 VDD pfet_05v0 L=3u W=53.5u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM2  net2 VN  net10 VDD pfet_05v0 L=3u W=53.4u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM4  net2 net2 net3 VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM6  net3 net3 VSS  VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM7  net1 net1 net4 VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM8  net4 net4 VSS  VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM9  OUT  net2 net6 VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM10 net6 net3 VSS  VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM11 net8 net1 net5 VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM12 net5 net4 VSS  VSS nfet_05v0 L=3u W=31.2u  nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM3  net8 net8 net7 VDD pfet_05v0 L=3u W=41.47u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM5  OUT  net8 net9 VDD pfet_05v0 L=3u W=41.47u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM13 net7 net7 VDD  VDD pfet_05v0 L=3u W=41.47u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM14 net9 net7 VDD  VDD pfet_05v0 L=3u W=41.47u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM15 net10 net10 VDD VDD pfet_05v0 L=3u W=41.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XM16 IBIAS_2uA net10 VDD VDD pfet_05v0 L=3u W=41.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends symmetrical-ota-2
+
+* ============================================================
+*  CONTROL
+* ============================================================
+.control
+  .temp 27
+
+  * --- TEST 1: ICMR ---
+  dc V_VCM 0 5 10m
+  let icmr_error = v(OUT_ICMR) - v(VCM)
+  plot icmr_error title 'TEST1: ICMR error = VOUT-VCM  [pass: |err|<50mV]'
+  meas dc VCM_low  when icmr_error = -0.05 cross=1
+  meas dc VCM_high when icmr_error = -0.05 cross=last
+  echo "ICMR low  = $&VCM_low V"
+  echo "ICMR high = $&VCM_high V"
+
+  * --- TEST 2: Vos ---
+  dc V_VP2 2.48 2.52 0.1m
+  let vos_error = v(OUT_VOS) - v(VP2)
+  plot vos_error title 'TEST2: Vos — zero crossing = Vos'
+  meas dc Vos_val when vos_error = 0 cross=1
+  echo "Vos = $&Vos_val V"
+
+  * --- TEST 3 & 4: single op point ---
+  op
+  print v(OUT_VOH) v(OUT_VOL) v(OUT_Q)
+  let VOH      = v(OUT_VOH)
+  let VOL      = v(OUT_VOL)
+  let headroom = 5 - VOH
+  let swing    = VOH - VOL
+  let Iq       = -i(V_VDD4)
+  let Pq       = 5 * Iq
+  echo "VOH       = $&VOH V  (headroom $&headroom V)"
+  echo "VOL       = $&VOL V"
+  echo "Swing     = $&swing V"
+  echo "OUT_Q     = $&v(OUT_Q) V"
+  echo "Iq        = $&Iq A"
+  echo "Pq        = $&Pq W"
+
+.endc
+
+.GLOBAL GND
+.end
