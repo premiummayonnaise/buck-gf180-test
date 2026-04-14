@@ -1,0 +1,66 @@
+** delvto_sanity_check_v2.spice
+** Verify that delvto works on sky130_fd_pr__nfet_g5v0d10v5
+**
+** Strategy: Use two identical NMOS in series with a current mirror,
+** measure the voltage difference at their drains to detect Vth shift.
+** We avoid @device[id] syntax since SKY130 devices are subcircuits.
+
+** Approach: Simple Id measurement via a sense resistor
+** M_ref and M_shift are both diode-connected. Compare drain currents.
+
+VDD vdd 0 2.5
+VGS vgs 0 1.25
+
+** Branch 1: Reference (no delvto)
+R_ref vdd d_ref 1k
+XM_ref d_ref vgs 0 0 sky130_fd_pr__nfet_g5v0d10v5 w=4.75 l=0.5
+
+** Branch 2: Shifted (delvto = +5mV for clearer signal)
+R_shift vdd d_shift 1k
+XM_shift d_shift vgs 0 0 sky130_fd_pr__nfet_g5v0d10v5 w=4.75 l=0.5 delvto=5e-3
+
+.control
+  .temp 27
+  dc VGS 0.0 2.5 0.001
+
+  * Measure currents via voltage drop across 1k resistors
+  let id_ref = (v(vdd) - v(d_ref)) / 1000
+  let id_shift = (v(vdd) - v(d_shift)) / 1000
+  let delta_id = id_ref - id_shift
+
+  plot id_ref id_shift title "Id comparison (should be offset)"
+  plot delta_id title "Delta Id (should be nonzero in subthreshold/linear)"
+
+  * Check at Vgs = 1.0V (should be in moderate inversion)
+  meas dc id_ref_1v find v(d_ref) at=1.0
+  meas dc id_shift_1v find v(d_shift) at=1.0
+
+  let vdiff = id_shift_1v - id_ref_1v
+  echo ""
+  echo "=== DELVTO SANITY CHECK v2 ==="
+  echo "Vdrain_ref   @ Vgs=1V : $&id_ref_1v V"
+  echo "Vdrain_shift @ Vgs=1V : $&id_shift_1v V"
+  echo "Difference             : $&vdiff V"
+  echo ""
+
+  * If delvto=+5mV is applied, the shifted device has higher Vth,
+  * so it conducts LESS current, meaning d_shift voltage is HIGHER
+  * (less voltage drop across R_shift).
+  * A difference of ~0 means delvto had no effect.
+
+  if abs(vdiff) > 0.001
+    echo "SUCCESS: delvto IS working on subcircuit instances."
+    echo "The drain voltage difference confirms Vth shift."
+    echo "You can proceed with the gradient sweep pipeline."
+  else
+    echo "FAILURE: delvto has NO effect on subcircuit instances."
+    echo "You need the gate voltage-source fallback approach."
+    echo "Report this back and I will modify the injection script."
+  end
+
+  echo ""
+.endc
+
+.lib /foss/pdks/sky130A/libs.tech/combined/sky130.lib.spice tt
+
+.end

@@ -1,0 +1,55 @@
+** delvto_sanity_check.spice
+** Verify that delvto works on sky130_fd_pr__nfet_g5v0d10v5
+** 
+** Expected: M_shift Id-Vgs curve shifts ~1mV left compared to M_ref
+** If both curves overlap, delvto is NOT being applied → need wrapper subckt approach
+
+VDD vdd 0 2.5
+VGS vgs 0 1.25
+VDS vds 0 1.25
+
+** Reference device (no delvto)
+XM_ref vds vgs 0 0 sky130_fd_pr__nfet_g5v0d10v5 w=4.75 l=0.5
+
+** Shifted device (delvto = +1mV)
+XM_shift vds vgs_shift 0 0 sky130_fd_pr__nfet_g5v0d10v5 w=4.75 l=0.5 delvto=1e-3
+
+** If delvto doesn't work on subckt instances, try this instead:
+** (uncomment and comment out XM_shift above)
+* M_shift vds vgs_shift 0 0 nfet_g5v0d10v5 w=4.75e-6 l=0.5e-6 delvto=1e-3
+
+** Both gates driven by same voltage
+V_gs_shift vgs_shift 0 1.25
+
+.control
+  dc VGS 0.0 2.5 0.001
+
+  * Plot both Id curves - they should be offset by ~1mV
+  plot @xm_ref[id] @xm_shift[id] 
+  plot @xm_ref[id]-@xm_shift[id] title "Delta_Id (should be nonzero)"
+  
+  * Measure threshold voltages
+  * At the threshold, Id crosses a reference current
+  meas dc vth_ref find v(vgs) when @xm_ref[id]=1e-6 cross=1
+  meas dc vth_shift find v(vgs_shift) when @xm_shift[id]=1e-6 cross=1
+  
+  let dvth = vth_shift - vth_ref
+  echo "=== DELVTO SANITY CHECK ==="
+  echo "Vth_ref = $&vth_ref"
+  echo "Vth_shift = $&vth_shift" 
+  echo "Delta_Vth = $&dvth (should be ~1mV)"
+  echo ""
+  
+  * Check if delvto had any effect
+  if abs(dvth) > 0.5e-3
+    echo "SUCCESS: delvto is working. Delta_Vth = $&dvth"
+  else
+    echo "FAILURE: delvto appears to have NO effect."
+    echo "Try using bare M device instead of X subcircuit instance."
+    echo "See comments in this file for the alternative approach."
+  end
+.endc
+
+.lib /foss/pdks/sky130A/libs.tech/combined/sky130.lib.spice tt
+
+.end
